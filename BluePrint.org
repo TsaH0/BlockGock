@@ -1,0 +1,13 @@
+#+TITLE: Blueprint for our Blockgock file
+
+1. Create the main function
+2. Create a new router and create a router which will accept the data for our
+   record struct
+   * The record struct consists of id (md5 hash) string , from string , to string
+     , amount int , policy string
+3. Take the data which is going to be given in json and decode it into a variable and use it to get md5 hash and generate the
+   id
+4. Now create a Block where Block has a struct Block, pos int,hash string, previous hash string, timestamps time.Time,get the hash until it a valid block,if it is valid we add to the list of blocks in the block chain
+5.The Blockchain is having chain of Blocks which is a pointer to ensure we retain the Blocks, difficulty and then we use a function to create and return the blockchain which is also going to have our blockchain
+6.Finally we should a Validator of Block, if we pass in one block it should check the number of zeroes else if we pass a blockchain, it should have facility to validate if the block is valid and the blockchain is valid, the block is valid if its hash is according to the difficulty, blockchain is valid if previous hash is matching with the new hash
+7.We will finally display the blockchain, and return as json, by converting to json
