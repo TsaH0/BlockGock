@@ -25,7 +25,7 @@ import (
 // I will have a the structs defined
 // first define the mux router and use it to get the record data and create a hash of md5 and assign the id to it ; use it to create a block out of it, by creating a hash of previous data and converting to the sha256 hash, i will give it to a function which keeps on increasing the nonce until, i get the final answer according to the prefix and difficulty-get the blockchain and add to the blockchain
 type Block struct {
-	Pos           string    `json:"id"`
+	Pos           int       `json:"id"`
 	Hash          string    `json:"hash"`
 	Previous_hash string    `json:"previousHash"`
 	Nonce         int       `json:"nonce"`
@@ -47,7 +47,7 @@ type Blockchain struct {
 }
 
 func CreateBlockchain(difficulty int) Blockchain {
-	Genesis := Block{
+	Genesis := Block{Pos: 0,
 		Previous_hash: "0", Hash: "0", Timestamps: time.Now(),
 	}
 	return Blockchain{
@@ -59,30 +59,34 @@ func isValid(hash string, difficulty int) bool {
 	return strings.HasPrefix(hash, strings.Repeat("0", difficulty))
 
 }
-func (b *Block) generateHash(data_for_block string, difficulty int) string {
-	hash := ""
+func (b *Block) generateHash(difficulty int) string {
 	nonce := 0
-	if isValid(hash, difficulty) {
-		h := sha256.New()
+	h := sha256.New()
+	data_for_block := b.Data + b.Previous_hash + b.Timestamps.String() + strconv.Itoa(b.Pos)
+	io.WriteString(h, data_for_block+strconv.Itoa(nonce))
+	hash := fmt.Sprintf("%x", h.Sum(nil))
+	for !isValid(hash, difficulty) {
+		h = sha256.New()
 		io.WriteString(h, data_for_block+strconv.Itoa(nonce))
-		hash = fmt.Sprint("%x", h.Sum(nil))
+		hash = fmt.Sprintf("%x", h.Sum(nil))
 		nonce += 1
 	}
 	b.Nonce = nonce
 	b.Hash = hash
+	return hash
 
 }
 func (bc *Blockchain) createBlock(data Record) *Block {
 	//extract all the fields and get the value of the hash, sha256 hash
 	data_to_write, _ := json.Marshal(data)
-	data_for_block := strconv.Itoa(data.Amount) + data.From + data.To + data.Policy + data.Id
+
 	prevBlock := bc.chain[len(bc.chain)-1]
 	//this is a bit wierd, so how to go about this ,
 	b := Block{
-		Data: string(data_to_write), Timestamps: time.Now(),Previous_hash: prevBlock.Hash,
+		Pos: prevBlock.Pos + 1, Data: string(data_to_write), Timestamps: time.Now(), Previous_hash: prevBlock.Hash,
 	}
 
-	b.generateHash(data_for_block, bc.difficulty)
+	b.generateHash(bc.difficulty)
 	return &b
 	//how to get the the values after now then
 }
@@ -91,14 +95,15 @@ func (bc *Blockchain) createBlock(data Record) *Block {
 func (bc *Blockchain) createRecord(w http.ResponseWriter, r *http.Request) {
 	var data Record
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		log.Println("There was an error in the createRecord Handler.The Error is :%v", err)
+		log.Printf("There was an error in the createRecord Handler.The Error is :%v", err)
 		w.Write([]byte("There was an error from our side"))
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 	h := md5.New()
 	io.WriteString(h, data.From+data.To+data.Policy+strconv.Itoa(data.Amount))
 	//now get the hash in terms of bytes and convert to a string
-	hash := fmt.Sprint("%x", h.Sum(nil))
+	hash := fmt.Sprintf("%x", h.Sum(nil))
 	//so i got the hash
 	//now i wish
 	data.Id = hash
@@ -112,16 +117,33 @@ func (bc *Blockchain) createRecord(w http.ResponseWriter, r *http.Request) {
 	//else now that we have the data we wish to parse it from
 
 }
-func (bc Blockchain)valid(){
-	
-}
-func (bc Blockchain)displayBlockchain(){
-	var bool ifValid=bc.valid()
-	if ifValid{
-		//this code will display if valid
+func (bc Blockchain) valid() bool {
+	valid := true
+	for i := 1; i < len(bc.chain); i++ {
+		currBlock := bc.chain[i]
+		prevBlock := bc.chain[i-1]
+		if currBlock.Previous_hash != prevBlock.Hash {
+			valid = false
+			break
+		}
+		if currBlock.Hash != currBlock.generateHash(bc.difficulty) {
+			valid = false
+			break
+		}
 	}
-	else{
-		//this code runs if not valid
+	return valid
+}
+func (bc *Blockchain) displayBlockchain(w http.ResponseWriter, r *http.Request) {
+	var ifValid bool = bc.valid()
+	if ifValid {
+		resp, _ := json.Marshal(bc.chain)
+		w.Write(resp)
+		w.WriteHeader(http.StatusOK)
+
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(([]byte("There was a error in displaying the blockchain, it is not valid")))
+
 	}
 }
 func main() {
